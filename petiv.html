@@ -1,0 +1,225 @@
+<!DOCTYPE html><html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pet I.V.</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #121212;
+      color: white;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    h1, h2 {
+      margin: 1rem 0 0.5rem;
+      text-align: center;
+    }
+    select, input, button {
+      padding: 0.7rem;
+      margin: 0.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      background: #00ffe1;
+      color: #000;
+      font-weight: bold;
+      transition: transform 0.2s ease;
+    }
+    button:hover {
+      transform: scale(1.05);
+    }
+    .hidden { display: none; }
+    #face {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: #00ffe1;
+      position: relative;
+      animation: pulse 4s infinite;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+    .eyes {
+      display: flex;
+      gap: 20px;
+    }
+    .eye {
+      width: 30px;
+      height: 30px;
+      background: black;
+      border-radius: 50%;
+      animation: blink 5s infinite, look 6s infinite alternate;
+    }
+    .mouth {
+      width: 80px;
+      height: 20px;
+      background: black;
+      border-radius: 10px;
+      margin-top: 15px;
+      animation: talk 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+      50% { box-shadow: 0 0 25px rgba(0,255,255,0.6); }
+    }
+    @keyframes blink {
+      0%, 100% { height: 30px; }
+      50% { height: 8px; }
+    }
+    @keyframes talk {
+      0%, 100% { height: 20px; }
+      50% { height: 12px; }
+    }
+    @keyframes look {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(5px); }
+    }
+    #chat {
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid #444;
+      padding: 1rem;
+      height: 300px;
+      overflow-y: auto;
+      background: #1e1e1e;
+      border-radius: 10px;
+      margin: 1rem 0;
+    }
+    .msg { margin: 0.5rem 0; }
+    .user-msg { color: #00ffe1; }
+    .bot-msg { color: white; }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>Bem-vindo ao Pet I.V.</h1>
+    <button onclick="showCreate()">Iniciar</button>
+  </div>
+  
+  <div id="createScreen" class="hidden">
+    <h2>Dê um nome ao seu Pet I.V.</h2>
+    <input id="name" placeholder="Nome do Pet" />
+    <button onclick="startPet()">Criar Pet</button>
+  </div>
+  
+  <div id="chatScreen" class="hidden">
+    <h2><span id="petTitle"></span></h2>
+    <div id="face">
+      <div class="eyes">
+        <div class="eye"></div>
+        <div class="eye"></div>
+      </div>
+      <div class="mouth"></div>
+    </div>
+    <div id="chat"></div>
+    <input id="input" placeholder="Fale com o Pet..." onkeydown="if(event.key==='Enter')sendMsg()" />
+    <button onclick="sendMsg()">Enviar</button>
+  </div>
+
+  <script>
+    const OPENROUTER_API_KEY = "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";
+    const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    
+    let pet = {};
+    let conversationHistory = [];
+
+    function showCreate() {
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('createScreen').classList.remove('hidden');
+    }
+
+    function startPet() {
+      const name = document.getElementById('name').value.trim();
+      if (!name) return alert("Dê um nome ao seu Pet I.V.");
+      pet = { name };
+      document.getElementById('petTitle').innerText = `Pet I.V. - ${name}`;
+      document.getElementById('createScreen').classList.add('hidden');
+      document.getElementById('chatScreen').classList.remove('hidden');
+      
+      // Mensagem inicial
+      addMessage(`${name}: Olá, eu sou ${name}, seu Pet I.V. virtual! Como posso te ajudar hoje?`, false);
+    }
+
+    function addMessage(message, isUser) {
+      const chatDiv = document.getElementById('chat');
+      const msgClass = isUser ? 'user-msg' : 'bot-msg';
+      const prefix = isUser ? 'Você' : pet.name;
+      chatDiv.innerHTML += `<div class='msg ${msgClass}'><b>${prefix}:</b> ${message}</div>`;
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      speak(message);
+    }
+
+    async function sendMsg() {
+      const input = document.getElementById('input');
+      const msg = input.value.trim();
+      if (!msg) return;
+      
+      // Adiciona mensagem do usuário ao chat
+      addMessage(msg, true);
+      
+      // Adiciona ao histórico da conversa
+      conversationHistory.push({
+        role: "user",
+        content: msg
+      });
+      
+      input.value = '';
+      
+      try {
+        const response = await fetch(OPENROUTER_API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": window.location.href,
+            "X-Title": "Pet I.V.",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "model": "deepseek/deepseek-chat:free",
+            "messages": [
+              {
+                "role": "system",
+                "content": `Você é um pet virtual chamado ${pet.name}. Seja amigável, carinhoso e divertido. Responda como um companheiro virtual.`
+              },
+              ...conversationHistory
+            ]
+          })
+        });
+
+        const data = await response.json();
+        const botResponse = data.choices[0].message.content;
+        
+        // Adiciona resposta ao chat e ao histórico
+        addMessage(botResponse, false);
+        conversationHistory.push({
+          role: "assistant",
+          content: botResponse
+        });
+      } catch (error) {
+        console.error("Error:", error);
+        addMessage("Desculpe, estou tendo problemas para responder agora. Podemos tentar de novo?", false);
+      }
+    }
+
+    function speak(text) {
+      const synth = window.speechSynthesis;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'pt-BR';
+      synth.speak(utter);
+    }
+
+    window.speechSynthesis.onvoiceschanged = () => {};
+  </script>
+</body>
+</html>
